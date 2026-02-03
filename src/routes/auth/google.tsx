@@ -1,4 +1,3 @@
-import { URLSearchParams, Response, fetch } from "@cloudflare/workers-types";
 import { Handler } from "../../app/router";
 import { verifyGoogleIdToken } from "../../services/auth/oidc";
 import { upsertUserFromOAuth } from "../../services/users";
