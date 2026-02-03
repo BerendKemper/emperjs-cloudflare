@@ -1,3 +1,4 @@
+import { TextEncoder } from "@cloudflare/workers-types";
 import { SignJWT, jwtVerify } from "jose";
 
 export async function signJWT(payload: object, secret: string) {

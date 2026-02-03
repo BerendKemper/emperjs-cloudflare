@@ -1,6 +1,8 @@
+import { Response, fetch, URLSearchParams } from "@cloudflare/workers-types";
 import { Handler } from "../../app/router";
 import { verifyMicrosoftIdToken } from "../../services/auth/oidc";
 import { upsertUserFromOAuth } from "../../services/users";
+import { VerifyObject } from "./types";
 
 export const handleMicrosoftCallback: Handler = async (req, env) => {
   const code = req._url.searchParams.get("code");
@@ -26,7 +28,7 @@ export const handleMicrosoftCallback: Handler = async (req, env) => {
     return new Response("Failed to exchange code", { status: 502 });
   }
 
-  const tokens = await tokenRes.json();
+  const tokens = await tokenRes.json() as VerifyObject;
   const idToken = tokens.id_token;
   if (!idToken) return new Response("Missing id_token", { status: 502 });
 

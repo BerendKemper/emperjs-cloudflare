@@ -1,6 +1,8 @@
+
+import { crypto } from "@cloudflare/workers-types";
 import { Environment } from "../types/env";
 
-export type OAuthProvider = "google" | "microsoft";
+export type OAuthProvider = `google` | `microsoft`;
 
 export interface OAuthProfile {
   email: string;
@@ -22,7 +24,7 @@ export async function upsertUserFromOAuth(
 
   if (!existing) {
     const id = crypto.randomUUID();
-    const roles = JSON.stringify(profile.roles ?? ["user"]);
+    const roles = JSON.stringify(profile.roles ?? [`user`]);
     await env.USERS.prepare(
       `INSERT INTO users (id, email, provider, provider_user_id, roles, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`
