@@ -1,8 +1,9 @@
-
-name = "emperjs-worker-api"
+# wrangler.toml
+name = "emperjs-cloudflare"
 account_id = "dec54be5d04a0ea03f0f71d90893e6cb"
 workers_dev = false
 compatibility_date = "2026-01-28"
+main = "src/index.ts"
 
 [env.production]
   type = "modules"
