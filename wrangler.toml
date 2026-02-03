@@ -9,6 +9,7 @@ type = "modules"
 [env.production]
   route = "api.emperjs.com/*"
   zone_id = "_"
+  main = "src/index.ts"
 
 [[env.production.d1_databases]]
   binding = "USERS"
