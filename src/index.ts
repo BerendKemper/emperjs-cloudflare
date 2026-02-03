@@ -9,6 +9,7 @@ import {
 
 import { Environment } from "./types/env";
 import { handleGoogleCallback } from "./routes/auth/google";
+import { handleMicrosoftCallback } from "./routes/auth/microsoft";
 
 /* ===========================
   Routes
@@ -17,7 +18,7 @@ import { handleGoogleCallback } from "./routes/auth/google";
 
 // router.get(`/auth`, handleAuth);
 router.get(`/auth/google/callback`, handleGoogleCallback);
-router.get(`/auth/microsoft/callback`, handleMicrosoftAuth);
+router.get(`/auth/microsoft/callback`, handleMicrosoftCallback);
 
 
 /* ===========================

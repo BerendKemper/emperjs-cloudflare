@@ -1,13 +1,12 @@
-
-import { jwtVerify } from "jose";
-
 import { Handler } from "../../app/router";
-import { Response, URLSearchParams, fetch } from "@cloudflare/workers-types";
+import { verifyMicrosoftIdToken } from "../../services/auth/oidc";
+import { upsertUserFromOAuth } from "../../services/users";
 
-export const handleMicrosoftAuth: Handler = async (req, env) => {
+export const handleMicrosoftCallback: Handler = async (req, env) => {
   const code = req._url.searchParams.get("code");
   if (!code) return new Response("Missing code", { status: 400 });
 
+  const redirectUri = `${req._url.origin}/auth/microsoft/callback`;
   const tokenRes = await fetch(
     "https://login.microsoftonline.com/common/oauth2/v2.0/token",
     {
@@ -17,21 +16,42 @@ export const handleMicrosoftAuth: Handler = async (req, env) => {
         client_id: env.MICROSOFT_CLIENT_ID,
         client_secret: env.MICROSOFT_CLIENT_SECRET,
         code,
-        redirect_uri: "https://api.emperjs.com/auth/microsoft/callback",
+        redirect_uri: redirectUri,
         grant_type: "authorization_code",
       }),
     }
   );
 
+  if (!tokenRes.ok) {
+    return new Response("Failed to exchange code", { status: 502 });
+  }
+
   const tokens = await tokenRes.json();
   const idToken = tokens.id_token;
+  if (!idToken) return new Response("Missing id_token", { status: 502 });
 
-  const payload = await verifyMicrosoftJWT(idToken);
+  const payload = await verifyMicrosoftIdToken(
+    idToken,
+    env.MICROSOFT_CLIENT_ID
+  );
 
-  const email = payload.email || payload.preferred_username;
+  const email = (payload.email || payload.preferred_username) as
+    | string
+    | undefined;
+  const providerUserId = (payload.oid || payload.sub) as string | undefined;
 
-  const role = await getUserRole(env, email);
-  if (!role) return new Response("Forbidden", { status: 403 });
+  if (!email || !providerUserId) {
+    return new Response("Missing email", { status: 400 });
+  }
 
-  return new Response("Authorized", { status: 200 });
+  const user = await upsertUserFromOAuth(env, {
+    email,
+    provider: "microsoft",
+    providerUserId,
+  });
+
+  return new Response(
+    JSON.stringify({ status: "ok", userId: user.id, roles: user.roles }),
+    { status: 200, headers: { "Content-Type": "application/json" } }
+  );
 };

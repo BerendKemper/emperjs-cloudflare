@@ -1,7 +1,6 @@
 
-import type { Handler, Request } from "../app/router";
-import { Response } from "@cloudflare/workers-types";
-import { verifyJWT } from "../services/jwt";
+import type { Handler } from "../app/router";
+import { verifyOidcToken } from "../services/auth/oidc";
 
 export const handleAuth: Handler = async (request, env, ctx) => {
   const authHeader = request.headers.get(`Authorization`);
@@ -12,8 +11,7 @@ export const handleAuth: Handler = async (request, env, ctx) => {
 
   const token = authHeader.split(` `)[1];
 
-  // Verify JWT token from Google or Microsoft
-  const payload = await verifyJWT(token);
+  const payload = await verifyOidcToken(token, env);
 
   // Example: check if email is in D1 admin list
   const email = payload.email;
