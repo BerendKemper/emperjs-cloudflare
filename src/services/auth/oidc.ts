@@ -1,5 +1,3 @@
-import { URL } from "@cloudflare/workers-types";
-
 import { createRemoteJWKSet, decodeJwt, jwtVerify, JWTPayload } from "jose";
 
 import { Environment } from "../../types/env";

@@ -1,4 +1,3 @@
-import { Response, fetch, URLSearchParams } from "@cloudflare/workers-types";
 import { Handler } from "../../app/router";
 import { verifyMicrosoftIdToken } from "../../services/auth/oidc";
 import { upsertUserFromOAuth } from "../../services/users";

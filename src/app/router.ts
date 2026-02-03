@@ -1,11 +1,4 @@
 
-import {
-  Request as CFRequest,
-  Response,
-  URL,
-  ExecutionContext
-} from '@cloudflare/workers-types';
-
 import { Environment } from '../types/env';
 
 /* ===========================
@@ -16,7 +9,9 @@ type HttpMethod = `GET` | `POST` | `PUT` | `DELETE`;
 export type Handler = (request: Request, env: Environment, ctx: ExecutionContext) => Promise<Response>;
 type Node = { [method in HttpMethod ]: Handler };
 type Routes = { [pathname: string]: Node };
-export interface Request extends CFRequest {
+type BaseRequest = globalThis.Request;
+
+export interface Request extends BaseRequest {
   _url: URL
 }
 
@@ -52,7 +47,11 @@ export const router = {
   Runtime Request Handler
 =========================== */
 
-export const requestHandler = async (request: CFRequest, env: Environment, ctx: ExecutionContext) => {
+export const requestHandler = async (
+  request: BaseRequest,
+  env: Environment,
+  ctx: ExecutionContext
+) => {
   const url = new URL(request.url);
   url.pathname = url.pathname.replace(/\/+$/, ``) || `/`;
   const node = routes[url.pathname];

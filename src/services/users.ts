@@ -1,5 +1,4 @@
 
-import { crypto } from "@cloudflare/workers-types";
 import { Environment } from "../types/env";
 
 export type OAuthProvider = `google` | `microsoft`;
@@ -10,6 +9,27 @@ export interface OAuthProfile {
   providerUserId: string;
   roles?: string[];
 }
+
+export interface UserRecord {
+  id: string;
+  email: string;
+  provider: OAuthProvider;
+  provider_user_id: string;
+  roles: string[];
+  is_active: number;
+  created_at: number;
+  updated_at: number;
+}
+
+const parseRoles = (roles: string | null | undefined): string[] => {
+  if (!roles) return [];
+  try {
+    const parsed = JSON.parse(roles);
+    return Array.isArray(parsed) ? parsed.filter((role) => typeof role === "string") : [];
+  } catch {
+    return [];
+  }
+};
 
 export async function upsertUserFromOAuth(
   env: Environment,
@@ -49,4 +69,50 @@ export async function upsertUserFromOAuth(
     .run();
 
   return { id: existing.id, roles: existing.roles };
+}
+
+export async function getUserByEmail(env: Environment, email: string) {
+  const user = await env.USERS.prepare(
+    `SELECT id, email, provider, provider_user_id, roles, is_active, created_at, updated_at
+     FROM users WHERE email = ? LIMIT 1`
+  )
+    .bind(email)
+    .first<{
+      id: string;
+      email: string;
+      provider: OAuthProvider;
+      provider_user_id: string;
+      roles: string;
+      is_active: number;
+      created_at: number;
+      updated_at: number;
+    }>();
+
+  if (!user) return null;
+
+  return {
+    ...user,
+    roles: parseRoles(user.roles),
+  } satisfies UserRecord;
+}
+
+export async function listUsers(env: Environment): Promise<UserRecord[]> {
+  const results = await env.USERS.prepare(
+    `SELECT id, email, provider, provider_user_id, roles, is_active, created_at, updated_at
+     FROM users ORDER BY created_at DESC`
+  ).all<{
+    id: string;
+    email: string;
+    provider: OAuthProvider;
+    provider_user_id: string;
+    roles: string;
+    is_active: number;
+    created_at: number;
+    updated_at: number;
+  }>();
+
+  return results.results.map((user) => ({
+    ...user,
+    roles: parseRoles(user.roles),
+  }));
 }
