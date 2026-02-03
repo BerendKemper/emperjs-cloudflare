@@ -25,7 +25,7 @@ const parseRoles = (roles: string | null | undefined): string[] => {
   if (!roles) return [];
   try {
     const parsed = JSON.parse(roles);
-    return Array.isArray(parsed) ? parsed.filter((role) => typeof role === "string") : [];
+    return Array.isArray(parsed) ? parsed.filter(role => typeof role === `string`) : [];
   } catch {
     return [];
   }
@@ -111,7 +111,7 @@ export async function listUsers(env: Environment): Promise<UserRecord[]> {
     updated_at: number;
   }>();
 
-  return results.results.map((user) => ({
+  return results.results.map(user => ({
     ...user,
     roles: parseRoles(user.roles),
   }));

@@ -4,40 +4,40 @@ import { verifyOidcToken } from "../services/auth/oidc";
 import { getUserByEmail, listUsers } from "../services/users";
 
 const extractEmail = (payload: JWTPayload) => {
-  if (typeof payload.email === "string") return payload.email;
-  if (typeof payload.preferred_username === "string") return payload.preferred_username;
+  if (typeof payload.email === `string`) return payload.email;
+  if (typeof payload.preferred_username === `string`) return payload.preferred_username;
   return null;
 };
 
 export const handleUsersList: Handler = async (request, env) => {
-  const authHeader = request.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return new Response("Missing token", { status: 401 });
+  const authHeader = request.headers.get(`Authorization`);
+  if (!authHeader?.startsWith(`Bearer `)) {
+    return new Response(`Missing token`, { status: 401 });
   }
 
-  const token = authHeader.replace("Bearer ", "");
+  const token = authHeader.replace(`Bearer `, ``);
   let payload: JWTPayload;
 
   try {
     payload = await verifyOidcToken(token, env);
   } catch {
-    return new Response("Invalid token", { status: 401 });
+    return new Response(`Invalid token`, { status: 401 });
   }
 
   const email = extractEmail(payload);
   const emailVerified = payload.email_verified;
   if (!email || emailVerified === false) {
-    return new Response("Forbidden", { status: 403 });
+    return new Response(`Forbidden`, { status: 403 });
   }
 
   const user = await getUserByEmail(env, email);
-  if (!user || user.is_active !== 1 || !user.roles.includes("admin")) {
-    return new Response("Forbidden", { status: 403 });
+  if (!user || user.is_active !== 1 || !user.roles.includes(`admin`)) {
+    return new Response(`Forbidden`, { status: 403 });
   }
 
   const users = await listUsers(env);
   return new Response(JSON.stringify({ users }), {
     status: 200,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": `application/json` },
   });
 };
