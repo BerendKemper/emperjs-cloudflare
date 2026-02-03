@@ -1,28 +1,12 @@
-
-
-import { jwtVerify } from "jose";
-
 import { Handler } from "../../app/router";
-import { Response, URLSearchParams, fetch } from "@cloudflare/workers-types";
-
-export async function verifyGoogleJWT(idToken: string, clientId: string) {
-  // Fetch Google JWKS (public keys)
-  const res = await fetch("https://www.googleapis.com/oauth2/v3/certs");
-  const jwks = await res.json();
-
-  // jose supports JWKS import
-  const { payload } = await jwtVerify(idToken, await importJWK(jwks.keys[0], 'RS256'), {
-    audience: clientId,
-  });
-
-  return payload;
-}
+import { verifyGoogleIdToken } from "../../services/auth/oidc";
+import { upsertUserFromOAuth } from "../../services/users";
 
 export const handleGoogleCallback: Handler = async (req, env) => {
   const code = req._url.searchParams.get("code");
   if (!code) return new Response("Missing code", { status: 400 });
 
-  // Exchange code for tokens
+  const redirectUri = `${req._url.origin}/auth/google/callback`;
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -30,29 +14,41 @@ export const handleGoogleCallback: Handler = async (req, env) => {
       code,
       client_id: env.GOOGLE_CLIENT_ID,
       client_secret: env.GOOGLE_CLIENT_SECRET,
-      redirect_uri: "https://api.emperjs.com/auth/google/callback",
+      redirect_uri: redirectUri,
       grant_type: "authorization_code",
     }),
   });
 
+  if (!tokenRes.ok) {
+    return new Response("Failed to exchange code", { status: 502 });
+  }
+
   const tokens = await tokenRes.json();
   const idToken = tokens.id_token;
+  if (!idToken) return new Response("Missing id_token", { status: 502 });
 
-  // Verify token
-  const payload = await verifyGoogleJWT(idToken);
+  const payload = await verifyGoogleIdToken(idToken, env.GOOGLE_CLIENT_ID);
 
-  // Example payload fields
-  const email = payload.email;
+  const email = payload.email as string | undefined;
   const emailVerified = payload.email_verified;
+  const providerUserId = payload.sub as string | undefined;
+
+  if (!email || !providerUserId) {
+    return new Response("Missing email", { status: 400 });
+  }
 
   if (!emailVerified) {
     return new Response("Email not verified", { status: 403 });
   }
 
-  // 🔐 authorization (your logic)
-  const role = await getUserRole(env, email);
-  if (!role) return new Response("Forbidden", { status: 403 });
+  const user = await upsertUserFromOAuth(env, {
+    email,
+    provider: "google",
+    providerUserId,
+  });
 
-  // Issue your own session (cookie / JWT)
-  return new Response("Authorized", { status: 200 });
+  return new Response(
+    JSON.stringify({ status: "ok", userId: user.id, roles: user.roles }),
+    { status: 200, headers: { "Content-Type": "application/json" } }
+  );
 };
