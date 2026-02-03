@@ -4,9 +4,9 @@ account_id = "dec54be5d04a0ea03f0f71d90893e6cb"
 workers_dev = false
 compatibility_date = "2026-01-28"
 main = "src/index.ts"
+type = "modules"
 
 [env.production]
-  type = "modules"
   route = "api.emperjs.com/*"
   zone_id = "_"
 
