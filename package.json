@@ -4,11 +4,11 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler publish"
+    "deploy": "wrangler deploy",
+    "lint": "eslint ."
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260124.0",
-    "@cloudflare/wrangler": "^1.16.0",
     "@typescript-eslint/parser": "^8.53.1",
     "eslint": "^9.39.2",
     "typescript": "^5.9.3",
