@@ -1,10 +1,13 @@
 import { Handler } from "../../app/router";
 import { verifyGoogleIdToken } from "../../services/auth/oidc";
-import { upsertUserFromOAuth } from "../../services/users";
+import { createSessionCookie, createSessionToken } from "../../services/auth/session";
+import { OAuthConflictError, upsertUserFromOAuth } from "../../services/users";
+import { resolveReturnTo } from "./redirect";
 import { VerifyObject } from "./types";
 
 export const handleGoogleCallback: Handler = async (req, env) => {
   const code = req._url.searchParams.get(`code`);
+  const state = req._url.searchParams.get(`state`);
   if (!code) return new Response(`Missing code`, { status: 400 });
 
   const redirectUri = `${req._url.origin}/auth/google/callback`;
@@ -42,14 +45,30 @@ export const handleGoogleCallback: Handler = async (req, env) => {
     return new Response(`Email not verified`, { status: 403 });
   }
 
-  const user = await upsertUserFromOAuth(env, {
-    email,
-    provider: `google`,
-    providerUserId,
-  });
+  let user: { id: string; roles: string[] };
+  try {
+    user = await upsertUserFromOAuth(env, {
+      email,
+      provider: `google`,
+      providerUserId,
+    });
+  } catch (error) {
+    if (error instanceof OAuthConflictError) {
+      return new Response(error.message, { status: 409 });
+    }
+    throw error;
+  }
 
-  return new Response(
-    JSON.stringify({ status: `ok`, userId: user.id, roles: user.roles }),
-    { status: 200, headers: { "Content-Type": `application/json` } }
+  const token = await createSessionToken(
+    { sub: user.id, roles: user.roles, provider: `google` },
+    env.SESSION_SECRET
   );
+
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: resolveReturnTo(state, env.FRONTEND_ORIGIN),
+      "Set-Cookie": createSessionCookie(token),
+    },
+  });
 };

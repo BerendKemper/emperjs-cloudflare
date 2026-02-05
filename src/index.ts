@@ -3,6 +3,7 @@ import { router, requestHandler } from "./app/router";
 import { Environment } from "./types/env";
 import { handleGoogleCallback } from "./routes/auth/google";
 import { handleMicrosoftCallback } from "./routes/auth/microsoft";
+import { handleSessionStatus } from "./routes/auth/session";
 import { handleUsersList } from "./routes/users";
 
 /* ===========================
@@ -12,6 +13,7 @@ import { handleUsersList } from "./routes/users";
 
 router.get(`/auth/google/callback`, handleGoogleCallback);
 router.get(`/auth/microsoft/callback`, handleMicrosoftCallback);
+router.get(`/auth/session`, handleSessionStatus);
 router.get(`/users`, handleUsersList);
 
 
