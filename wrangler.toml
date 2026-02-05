@@ -1,17 +1,14 @@
-# wrangler.toml
 name = "emperjs-cloudflare"
 account_id = "dec54be5d04a0ea03f0f71d90893e6cb"
 workers_dev = false
 compatibility_date = "2026-01-28"
 main = "src/index.ts"
-type = "modules"
 
-[env.production]
-  route = "api.emperjs.com/*"
-  zone_id = "_"
-  main = "src/index.ts"
+routes = [
+  { pattern = "api.emperjs.com/*", zone_id = "e3261362354cf960975f2b34060937f8" }
+]
 
-[[env.production.d1_databases]]
-  binding = "USERS"
-  database_name = "emperjs-users"
-  database_id = "1eea5fda-b39a-40fe-8867-d268e6571c44"
+[[d1_databases]]
+binding = "USERS"
+database_name = "emperjs-users"
+database_id = "1eea5fda-b39a-40fe-8867-d268e6571c44"
