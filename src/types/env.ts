@@ -7,4 +7,6 @@ export interface Environment {
   GOOGLE_CLIENT_SECRET: string;
   MICROSOFT_CLIENT_ID: string;
   MICROSOFT_CLIENT_SECRET: string;
+  SESSION_SECRET: string;
+  FRONTEND_ORIGIN?: string;
 }

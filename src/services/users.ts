@@ -21,6 +21,13 @@ export interface UserRecord {
   updated_at: number;
 }
 
+export class OAuthConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = `OAuthConflictError`;
+  }
+}
+
 const parseRoles = (roles: string | null | undefined): string[] => {
   if (!roles) return [];
   try {
@@ -43,8 +50,42 @@ export async function upsertUserFromOAuth(
     .first<{ id: string; roles: string }>();
 
   if (!existing) {
+    const byEmail = await env.USERS.prepare(
+      `SELECT id, provider, provider_user_id, roles FROM users WHERE email = ? LIMIT 1`
+    )
+      .bind(profile.email)
+      .first<{
+        id: string;
+        provider: OAuthProvider;
+        provider_user_id: string;
+        roles: string;
+      }>();
+
+    if (byEmail) {
+      if (byEmail.provider !== profile.provider) {
+        throw new OAuthConflictError(
+          `Email already linked to a different provider`
+        );
+      }
+
+      if (byEmail.provider_user_id !== profile.providerUserId) {
+        throw new OAuthConflictError(
+          `Email already linked to a different provider account`
+        );
+      }
+
+      await env.USERS.prepare(
+        `UPDATE users SET updated_at = ? WHERE id = ?`
+      )
+        .bind(now, byEmail.id)
+        .run();
+
+      return { id: byEmail.id, roles: parseRoles(byEmail.roles) };
+    }
+
     const id = crypto.randomUUID();
-    const roles = JSON.stringify(profile.roles ?? [`user`]);
+    const userRoles = profile.roles ?? [`user`];
+    const roles = JSON.stringify(userRoles);
     await env.USERS.prepare(
       `INSERT INTO users (id, email, provider, provider_user_id, roles, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`
@@ -59,7 +100,7 @@ export async function upsertUserFromOAuth(
         now
       )
       .run();
-    return { id, roles };
+    return { id, roles: userRoles };
   }
 
   await env.USERS.prepare(
@@ -68,7 +109,7 @@ export async function upsertUserFromOAuth(
     .bind(profile.email, now, existing.id)
     .run();
 
-  return { id: existing.id, roles: existing.roles };
+  return { id: existing.id, roles: parseRoles(existing.roles) };
 }
 
 export async function getUserByEmail(env: Environment, email: string) {
