@@ -30,7 +30,7 @@ function registerRoute(
   url: string,
   handler: Handler
 ): void {
-  const { pathname } = new URL(url);
+  const { pathname } = new URL(url, `https://worker.local`);
   const node = routes[pathname] ??= Object.create(null);
   if (node[method]) throw new Error(`Route already registered: ${method} ${pathname}`);
   node[method] = handler;
