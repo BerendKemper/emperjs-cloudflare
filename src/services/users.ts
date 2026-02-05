@@ -21,6 +21,20 @@ export interface UserRecord {
   updated_at: number;
 }
 
+export class OAuthConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = `OAuthConflictError`;
+  }
+}
+
+const normalizeEmail = (email: string): string => email.trim().toLowerCase();
+
+const isUniqueConstraintError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) return false;
+  return /unique|constraint/i.test(error.message);
+};
+
 const parseRoles = (roles: string | null | undefined): string[] => {
   if (!roles) return [];
   try {
@@ -35,6 +49,7 @@ export async function upsertUserFromOAuth(
   env: Environment,
   profile: OAuthProfile
 ) {
+  const normalizedEmail = normalizeEmail(profile.email);
   const now = Date.now();
   const existing = await env.USERS.prepare(
     `SELECT id, roles FROM users WHERE provider = ? AND provider_user_id = ?`
@@ -43,40 +58,93 @@ export async function upsertUserFromOAuth(
     .first<{ id: string; roles: string }>();
 
   if (!existing) {
-    const id = crypto.randomUUID();
-    const roles = JSON.stringify(profile.roles ?? [`user`]);
-    await env.USERS.prepare(
-      `INSERT INTO users (id, email, provider, provider_user_id, roles, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    const byEmail = await env.USERS.prepare(
+      `SELECT id, provider, provider_user_id, roles
+       FROM users
+       WHERE lower(email) = lower(?)
+       LIMIT 1`
     )
-      .bind(
-        id,
-        profile.email,
-        profile.provider,
-        profile.providerUserId,
-        roles,
-        now,
-        now
+      .bind(normalizedEmail)
+      .first<{
+        id: string;
+        provider: OAuthProvider;
+        provider_user_id: string;
+        roles: string;
+      }>();
+
+    if (byEmail) {
+      if (byEmail.provider !== profile.provider) {
+        throw new OAuthConflictError(
+          `Email already linked to a different provider`
+        );
+      }
+
+      if (byEmail.provider_user_id !== profile.providerUserId) {
+        throw new OAuthConflictError(
+          `Email already linked to a different provider account`
+        );
+      }
+
+      await env.USERS.prepare(
+        `UPDATE users SET updated_at = ? WHERE id = ?`
       )
-      .run();
-    return { id, roles };
+        .bind(now, byEmail.id)
+        .run();
+
+      return { id: byEmail.id, roles: parseRoles(byEmail.roles) };
+    }
+
+    const id = crypto.randomUUID();
+    const userRoles = profile.roles ?? [`user`];
+    const roles = JSON.stringify(userRoles);
+    try {
+      await env.USERS.prepare(
+        `INSERT INTO users (id, email, provider, provider_user_id, roles, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      )
+        .bind(
+          id,
+          normalizedEmail,
+          profile.provider,
+          profile.providerUserId,
+          roles,
+          now,
+          now
+        )
+        .run();
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw new OAuthConflictError(`Email already linked to another account`);
+      }
+      throw error;
+    }
+
+    return { id, roles: userRoles };
   }
 
-  await env.USERS.prepare(
-    `UPDATE users SET email = ?, updated_at = ? WHERE id = ?`
-  )
-    .bind(profile.email, now, existing.id)
-    .run();
+  try {
+    await env.USERS.prepare(
+      `UPDATE users SET email = ?, updated_at = ? WHERE id = ?`
+    )
+      .bind(normalizedEmail, now, existing.id)
+      .run();
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      throw new OAuthConflictError(`Email already linked to another account`);
+    }
+    throw error;
+  }
 
-  return { id: existing.id, roles: existing.roles };
+  return { id: existing.id, roles: parseRoles(existing.roles) };
 }
 
 export async function getUserByEmail(env: Environment, email: string) {
+  const normalizedEmail = normalizeEmail(email);
   const user = await env.USERS.prepare(
     `SELECT id, email, provider, provider_user_id, roles, is_active, created_at, updated_at
-     FROM users WHERE email = ? LIMIT 1`
+     FROM users WHERE lower(email) = lower(?) LIMIT 1`
   )
-    .bind(email)
+    .bind(normalizedEmail)
     .first<{
       id: string;
       email: string;

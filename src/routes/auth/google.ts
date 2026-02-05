@@ -1,55 +1,78 @@
 import { Handler } from "../../app/router";
 import { verifyGoogleIdToken } from "../../services/auth/oidc";
-import { upsertUserFromOAuth } from "../../services/users";
+import { createSessionCookie, createSessionToken } from "../../services/auth/session";
+import { OAuthConflictError, upsertUserFromOAuth } from "../../services/users";
+import { resolveReturnTo } from "./redirect";
 import { VerifyObject } from "./types";
 
 export const handleGoogleCallback: Handler = async (req, env) => {
-  const code = req._url.searchParams.get(`code`);
-  if (!code) return new Response(`Missing code`, { status: 400 });
+  try {
+    const code = req._url.searchParams.get(`code`);
+    const state = req._url.searchParams.get(`state`);
+    if (!code) return new Response(`Missing code`, { status: 400 });
 
-  const redirectUri = `${req._url.origin}/auth/google/callback`;
-  const tokenRes = await fetch(`https://oauth2.googleapis.com/token`, {
-    method: `POST`,
-    headers: { "Content-Type": `application/x-www-form-urlencoded` },
-    body: new URLSearchParams({
-      code,
-      client_id: env.GOOGLE_CLIENT_ID,
-      client_secret: env.GOOGLE_CLIENT_SECRET,
-      redirect_uri: redirectUri,
-      grant_type: `authorization_code`,
-    }),
-  });
+    const redirectUri = `${req._url.origin}/auth/google/callback`;
+    const tokenRes = await fetch(`https://oauth2.googleapis.com/token`, {
+      method: `POST`,
+      headers: { "Content-Type": `application/x-www-form-urlencoded` },
+      body: new URLSearchParams({
+        code,
+        client_id: env.GOOGLE_CLIENT_ID,
+        client_secret: env.GOOGLE_CLIENT_SECRET,
+        redirect_uri: redirectUri,
+        grant_type: `authorization_code`,
+      }),
+    });
 
-  if (!tokenRes.ok) {
-    return new Response(`Failed to exchange code`, { status: 502 });
+    if (!tokenRes.ok) {
+      return new Response(`Failed to exchange code`, { status: 502 });
+    }
+
+    const tokens = await tokenRes.json() as VerifyObject;
+    const idToken = tokens.id_token;
+    if (!idToken) return new Response(`Missing id_token`, { status: 502 });
+
+    const payload = await verifyGoogleIdToken(idToken, env.GOOGLE_CLIENT_ID);
+
+    const email = payload.email as string | undefined;
+    const emailVerified = payload.email_verified;
+    const providerUserId = payload.sub as string | undefined;
+
+    if (!email || !providerUserId) {
+      return new Response(`Missing email`, { status: 400 });
+    }
+
+    if (!emailVerified) {
+      return new Response(`Email not verified`, { status: 403 });
+    }
+
+    let user: { id: string; roles: string[] };
+    try {
+      user = await upsertUserFromOAuth(env, {
+        email,
+        provider: `google`,
+        providerUserId,
+      });
+    } catch (error) {
+      if (error instanceof OAuthConflictError) {
+        return new Response(error.message, { status: 409 });
+      }
+      throw error;
+    }
+
+    const token = await createSessionToken(
+      { sub: user.id, roles: user.roles, provider: `google` },
+      env.SESSION_SECRET
+    );
+
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: resolveReturnTo(state, env.FRONTEND_ORIGIN),
+        "Set-Cookie": createSessionCookie(token),
+      },
+    });
+  } catch {
+    return new Response(`Authentication failed`, { status: 500 });
   }
-
-  const tokens = await tokenRes.json() as VerifyObject;
-  const idToken = tokens.id_token;
-  if (!idToken) return new Response(`Missing id_token`, { status: 502 });
-
-  const payload = await verifyGoogleIdToken(idToken, env.GOOGLE_CLIENT_ID);
-
-  const email = payload.email as string | undefined;
-  const emailVerified = payload.email_verified;
-  const providerUserId = payload.sub as string | undefined;
-
-  if (!email || !providerUserId) {
-    return new Response(`Missing email`, { status: 400 });
-  }
-
-  if (!emailVerified) {
-    return new Response(`Email not verified`, { status: 403 });
-  }
-
-  const user = await upsertUserFromOAuth(env, {
-    email,
-    provider: `google`,
-    providerUserId,
-  });
-
-  return new Response(
-    JSON.stringify({ status: `ok`, userId: user.id, roles: user.roles }),
-    { status: 200, headers: { "Content-Type": `application/json` } }
-  );
 };
