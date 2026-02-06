@@ -82,41 +82,6 @@ export async function upsertUserFromOAuth(
         .run();
     } catch (error) {
       if (isUniqueConstraintError(error)) {
-        const existingByProvider = await env.USERS.prepare(
-          `SELECT id, roles
-           FROM users
-           WHERE provider = ? AND provider_user_id = ?
-           LIMIT 1`
-        )
-          .bind(profile.provider, profile.providerUserId)
-          .first<{ id: string; roles: string }>();
-
-        if (existingByProvider) {
-          return { id: existingByProvider.id, roles: parseRoles(existingByProvider.roles) };
-        }
-
-        const existingByEmail = await env.USERS.prepare(
-          `SELECT id, provider, provider_user_id, roles
-           FROM users
-           WHERE lower(email) = lower(?)
-           LIMIT 1`
-        )
-          .bind(normalizedEmail)
-          .first<{
-            id: string;
-            provider: AuthProvider;
-            provider_user_id: string;
-            roles: string;
-          }>();
-
-        if (
-          existingByEmail &&
-          existingByEmail.provider === profile.provider &&
-          existingByEmail.provider_user_id === profile.providerUserId
-        ) {
-          return { id: existingByEmail.id, roles: parseRoles(existingByEmail.roles) };
-        }
-
         throw new OAuthConflictError(`Email already linked to another account`);
       }
       throw error;
