@@ -1,25 +1,28 @@
-import { Handler } from "../../app/router";
-import { verifyGoogleIdToken } from "../../services/auth/oidc";
-import { createSessionCookie, createSessionToken } from "../../services/auth/session";
-import { OAuthConflictError, upsertUserFromOAuth } from "../../services/users";
-import { resolveReturnTo } from "./redirect";
-import { VerifyObject } from "./types";
 
-export const handleGoogleCallback: Handler = async (req, env) => {
+import { Request } from "../../../app/router";
+import { createSessionCookie, createSessionToken } from "../session";
+import { OAuthConflictError } from "../../users/utils";
+import { upsertUserFromOAuth } from "../../users/d1";
+import { resolveReturnTo } from "../../../routes/auth/redirect";
+import { VerifyObject } from "../jwt/types";
+import { Environment } from "../../../types/env";
+import { OidcProviderScheme, OidcProvider } from "./providers";
+import { verifyOidcToken } from "./verify";
+
+export async function handleOidcCallback(scheme: OidcProviderScheme, req: Request, env: Environment) {
   try {
     const code = req._url.searchParams.get(`code`);
     const state = req._url.searchParams.get(`state`);
     if (!code) return new Response(`Missing code`, { status: 400 });
 
-    const redirectUri = `${req._url.origin}/auth/google/callback`;
-    const tokenRes = await fetch(`https://oauth2.googleapis.com/token`, {
+    const tokenRes = await fetch(scheme.url, {
       method: `POST`,
       headers: { "Content-Type": `application/x-www-form-urlencoded` },
       body: new URLSearchParams({
         code,
-        client_id: env.GOOGLE_CLIENT_ID,
-        client_secret: env.GOOGLE_CLIENT_SECRET,
-        redirect_uri: redirectUri,
+        client_id: scheme.client_id,
+        client_secret: scheme.client_secret,
+        redirect_uri: `${req._url.origin}/${scheme.redirect_uri}`,
         grant_type: `authorization_code`,
       }),
     });
@@ -32,11 +35,11 @@ export const handleGoogleCallback: Handler = async (req, env) => {
     const idToken = tokens.id_token;
     if (!idToken) return new Response(`Missing id_token`, { status: 502 });
 
-    const payload = await verifyGoogleIdToken(idToken, env.GOOGLE_CLIENT_ID);
+    const payload = await verifyOidcToken(idToken, scheme);
 
-    const email = payload.email as string | undefined;
+    const email = (payload.email || payload.preferred_username) as string | undefined;
     const emailVerified = payload.email_verified;
-    const providerUserId = payload.sub as string | undefined;
+    const providerUserId = (payload.oid || payload.sub) as string | undefined;
 
     if (!email || !providerUserId) {
       return new Response(`Missing email`, { status: 400 });
@@ -50,7 +53,7 @@ export const handleGoogleCallback: Handler = async (req, env) => {
     try {
       user = await upsertUserFromOAuth(env, {
         email,
-        provider: `google`,
+        provider: scheme.provider as OidcProvider,
         providerUserId,
       });
     } catch (error) {

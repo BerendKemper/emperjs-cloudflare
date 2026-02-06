@@ -1,18 +1,18 @@
 
 import { router, requestHandler } from "./app/router";
 import { Environment } from "./types/env";
-import { handleGoogleCallback } from "./routes/auth/google";
-import { handleMicrosoftCallback } from "./routes/auth/microsoft";
 import { handleSessionStatus } from "./routes/auth/session";
 import { handleUsersList } from "./routes/users";
+import { handleOidcCallback } from "./services/auth/oidc/callback";
+import { oidcSchemes } from "./services/auth/oidc/providers";
 
 /* ===========================
   Routes
   all routes run on CNAME api
 =========================== */
 
-router.get(`/auth/google/callback`, handleGoogleCallback);
-router.get(`/auth/microsoft/callback`, handleMicrosoftCallback);
+router.get(`/auth/google/callback`, handleOidcCallback.bind(null, oidcSchemes.google));
+router.get(`/auth/microsoft/callback`, handleOidcCallback.bind(null, oidcSchemes.microsoft));
 router.get(`/auth/session`, handleSessionStatus);
 router.get(`/users`, handleUsersList);
 

@@ -1,7 +1,7 @@
 import { Handler } from "../app/router";
 import type { JWTPayload } from "jose";
-import { verifyOidcToken } from "../services/auth/oidc";
-import { getUserByEmail, listUsers } from "../services/users";
+import { verifyOidcFromJwtToken } from "../services/auth/oidc/verify";
+import { getUserByEmail, listUsers } from "../services/users/d1";
 
 const extractEmail = (payload: JWTPayload) => {
   if (typeof payload.email === `string`) return payload.email;
@@ -19,7 +19,7 @@ export const handleUsersList: Handler = async (request, env) => {
   let payload: JWTPayload;
 
   try {
-    payload = await verifyOidcToken(token, env);
+    payload = await verifyOidcFromJwtToken(token);
   } catch {
     return new Response(`Invalid token`, { status: 401 });
   }

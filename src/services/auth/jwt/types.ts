@@ -1,4 +1,4 @@
 
 export interface VerifyObject {
-  id_token: string
+  id_token: string;
 }

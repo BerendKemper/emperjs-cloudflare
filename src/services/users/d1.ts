@@ -1,39 +1,7 @@
 
-import { Environment } from "../types/env";
-
-export type OAuthProvider = `google` | `microsoft`;
-
-export interface OAuthProfile {
-  email: string;
-  provider: OAuthProvider;
-  providerUserId: string;
-  roles?: string[];
-}
-
-export interface UserRecord {
-  id: string;
-  email: string;
-  provider: OAuthProvider;
-  provider_user_id: string;
-  roles: string[];
-  is_active: number;
-  created_at: number;
-  updated_at: number;
-}
-
-export class OAuthConflictError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = `OAuthConflictError`;
-  }
-}
-
-const normalizeEmail = (email: string): string => email.trim().toLowerCase();
-
-const isUniqueConstraintError = (error: unknown): boolean => {
-  if (!(error instanceof Error)) return false;
-  return /unique|constraint/i.test(error.message);
-};
+import { Environment } from "../../types/env";
+import { AuthProvider, AuthProfile, UserRecord } from "./types";
+import { normalizeEmail, OAuthConflictError, isUniqueConstraintError } from "./utils";
 
 const parseRoles = (roles: string | null | undefined): string[] => {
   if (!roles) return [];
@@ -47,7 +15,7 @@ const parseRoles = (roles: string | null | undefined): string[] => {
 
 export async function upsertUserFromOAuth(
   env: Environment,
-  profile: OAuthProfile
+  profile: AuthProfile
 ) {
   const normalizedEmail = normalizeEmail(profile.email);
   const now = Date.now();
@@ -67,7 +35,7 @@ export async function upsertUserFromOAuth(
       .bind(normalizedEmail)
       .first<{
         id: string;
-        provider: OAuthProvider;
+        provider: AuthProvider;
         provider_user_id: string;
         roles: string;
       }>();
@@ -148,7 +116,7 @@ export async function getUserByEmail(env: Environment, email: string) {
     .first<{
       id: string;
       email: string;
-      provider: OAuthProvider;
+      provider: AuthProvider;
       provider_user_id: string;
       roles: string;
       is_active: number;
@@ -171,7 +139,7 @@ export async function listUsers(env: Environment): Promise<UserRecord[]> {
   ).all<{
     id: string;
     email: string;
-    provider: OAuthProvider;
+    provider: AuthProvider;
     provider_user_id: string;
     roles: string;
     is_active: number;
