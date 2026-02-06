@@ -45,7 +45,7 @@ export async function handleOidcCallback(scheme: OidcProviderScheme, req: Reques
       return new Response(`Missing email`, { status: 400 });
     }
 
-    if (!emailVerified) {
+    if (emailVerified === false) {
       return new Response(`Email not verified`, { status: 403 });
     }
 
@@ -64,7 +64,7 @@ export async function handleOidcCallback(scheme: OidcProviderScheme, req: Reques
     }
 
     const token = await createSessionToken(
-      { sub: user.id, roles: user.roles, provider: `google` },
+      { sub: user.id, roles: user.roles, provider: scheme.provider },
       env.SESSION_SECRET
     );
 
