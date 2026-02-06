@@ -52,18 +52,61 @@ export const requestHandler = async (
   env: Environment,
   ctx: ExecutionContext
 ) => {
+  const origin = request.headers.get(`Origin`);
+  const allowedOrigin = env.FRONTEND_ORIGIN ?? origin ?? null;
+  const corsHeaders = allowedOrigin
+    ? {
+        "Access-Control-Allow-Origin": allowedOrigin,
+        "Access-Control-Allow-Credentials": `true`,
+        "Access-Control-Allow-Methods": `GET,POST,PUT,DELETE,OPTIONS`,
+        "Access-Control-Allow-Headers":
+          request.headers.get(`Access-Control-Request-Headers`) ??
+          `Content-Type,Authorization`,
+        Vary: `Origin`,
+      }
+    : null;
+
+  if (request.method === `OPTIONS`) {
+    const response = new Response(null, {
+      status: 204,
+      headers: corsHeaders ?? undefined,
+    });
+    return response;
+  }
   const url = new URL(request.url);
   url.pathname = url.pathname.replace(/\/+$/, ``) || `/`;
   const node = routes[url.pathname];
-  if (!node) return new Response(
-    `Not Found: ${url.pathname}`,
-    { status: 404 }
-  );
+  if (!node) {
+    const response = new Response(
+      `Not Found: ${url.pathname}`,
+      { status: 404 }
+    );
+    if (corsHeaders) {
+      for (const [key, value] of Object.entries(corsHeaders)) {
+        response.headers.set(key, value);
+      }
+    }
+    return response;
+  }
   const handler = node[request.method as HttpMethod];
-  if (!handler) return new Response(
-    `Method ${request.method} not allowed for ${url.pathname}`,
-    { status: 405, headers: { Allow: Object.keys(node).join(`, `) } }
-  );
+  if (!handler) {
+    const response = new Response(
+      `Method ${request.method} not allowed for ${url.pathname}`,
+      { status: 405, headers: { Allow: Object.keys(node).join(`, `) } }
+    );
+    if (corsHeaders) {
+      for (const [key, value] of Object.entries(corsHeaders)) {
+        response.headers.set(key, value);
+      }
+    }
+    return response;
+  }
   (request as Request)._url = url;
-  return handler(request as Request, env, ctx);
+  const response = await handler(request as Request, env, ctx);
+  if (corsHeaders) {
+    for (const [key, value] of Object.entries(corsHeaders)) {
+      response.headers.set(key, value);
+    }
+  }
+  return response;
 };
