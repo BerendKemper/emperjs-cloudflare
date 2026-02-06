@@ -74,6 +74,15 @@ export async function handleOidcCallback(scheme: OidcProviderScheme, req: Reques
     const email = (payload.email || payload.preferred_username) as string | undefined;
     const emailVerified = payload.email_verified;
     const providerUserId = (payload.oid || payload.sub) as string | undefined;
+    const displayName = (() => {
+      if (typeof payload.name === `string` && payload.name.trim()) {
+        return payload.name.trim();
+      }
+      const givenName = typeof payload.given_name === `string` ? payload.given_name.trim() : ``;
+      const familyName = typeof payload.family_name === `string` ? payload.family_name.trim() : ``;
+      const combined = `${givenName} ${familyName}`.trim();
+      return combined || null;
+    })();
 
     if (!email || !providerUserId) {
       return redirectToReturn(state, {
@@ -93,6 +102,7 @@ export async function handleOidcCallback(scheme: OidcProviderScheme, req: Reques
     try {
       user = await upsertUserFromOAuth(env, {
         email,
+        displayName,
         provider: scheme.provider as OidcProvider,
         providerUserId,
       });

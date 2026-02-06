@@ -2,6 +2,7 @@
 CREATE TABLE users (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL,
+  display_name TEXT,
   provider TEXT NOT NULL,
   provider_user_id TEXT NOT NULL,
   roles TEXT NOT NULL,
