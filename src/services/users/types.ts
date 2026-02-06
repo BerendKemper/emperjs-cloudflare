@@ -8,11 +8,13 @@ export interface AuthProfile {
   provider: AuthProvider;
   providerUserId: string;
   roles?: string[];
+  displayName?: string | null;
 }
 
 export interface UserRecord {
   id: string;
   email: string;
+  display_name: string | null;
   provider: AuthProvider;
   provider_user_id: string;
   roles: string[];
