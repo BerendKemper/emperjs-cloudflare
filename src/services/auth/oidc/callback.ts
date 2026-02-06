@@ -10,10 +10,36 @@ import { OidcProviderScheme, OidcProvider } from "./providers";
 import { verifyOidcToken } from "./verify";
 
 export async function handleOidcCallback(scheme: OidcProviderScheme, req: Request, env: Environment) {
+  const redirectToReturn = (
+    state: string | null,
+    options?: { error?: string; errorDescription?: string; headers?: HeadersInit }
+  ): Response => {
+    const location = new URL(resolveReturnTo(state, env.FRONTEND_ORIGIN));
+    if (options?.error) {
+      location.searchParams.set(`authError`, options.error);
+      if (options.errorDescription) {
+        location.searchParams.set(`authErrorDescription`, options.errorDescription);
+      }
+    }
+
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: location.toString(),
+        ...(options?.headers ?? {}),
+      },
+    });
+  };
+
   try {
     const code = req._url.searchParams.get(`code`);
     const state = req._url.searchParams.get(`state`);
-    if (!code) return new Response(`Missing code`, { status: 400 });
+    if (!code) {
+      return redirectToReturn(state, {
+        error: `missing_code`,
+        errorDescription: `Missing code`,
+      });
+    }
 
     const tokenRes = await fetch(scheme.url, {
       method: `POST`,
@@ -28,12 +54,20 @@ export async function handleOidcCallback(scheme: OidcProviderScheme, req: Reques
     });
 
     if (!tokenRes.ok) {
-      return new Response(`Failed to exchange code`, { status: 502 });
+      return redirectToReturn(state, {
+        error: `token_exchange_failed`,
+        errorDescription: `Failed to exchange code`,
+      });
     }
 
     const tokens = await tokenRes.json() as VerifyObject;
     const idToken = tokens.id_token;
-    if (!idToken) return new Response(`Missing id_token`, { status: 502 });
+    if (!idToken) {
+      return redirectToReturn(state, {
+        error: `missing_id_token`,
+        errorDescription: `Missing id_token`,
+      });
+    }
 
     const payload = await verifyOidcToken(idToken, scheme);
 
@@ -42,11 +76,17 @@ export async function handleOidcCallback(scheme: OidcProviderScheme, req: Reques
     const providerUserId = (payload.oid || payload.sub) as string | undefined;
 
     if (!email || !providerUserId) {
-      return new Response(`Missing email`, { status: 400 });
+      return redirectToReturn(state, {
+        error: `missing_identity`,
+        errorDescription: `Missing email`,
+      });
     }
 
     if (emailVerified === false) {
-      return new Response(`Email not verified`, { status: 403 });
+      return redirectToReturn(state, {
+        error: `email_not_verified`,
+        errorDescription: `Email not verified`,
+      });
     }
 
     let user: { id: string; roles: string[] };
@@ -58,7 +98,10 @@ export async function handleOidcCallback(scheme: OidcProviderScheme, req: Reques
       });
     } catch (error) {
       if (error instanceof OAuthConflictError) {
-        return new Response(error.message, { status: 409 });
+        return redirectToReturn(state, {
+          error: `oauth_conflict`,
+          errorDescription: error.message,
+        });
       }
       throw error;
     }
@@ -68,14 +111,15 @@ export async function handleOidcCallback(scheme: OidcProviderScheme, req: Reques
       env.SESSION_SECRET
     );
 
-    return new Response(null, {
-      status: 302,
+    return redirectToReturn(state, {
       headers: {
-        Location: resolveReturnTo(state, env.FRONTEND_ORIGIN),
         "Set-Cookie": createSessionCookie(token),
       },
     });
   } catch {
-    return new Response(`Authentication failed`, { status: 500 });
+    return redirectToReturn(req._url.searchParams.get(`state`), {
+      error: `authentication_failed`,
+      errorDescription: `Authentication failed`,
+    });
   }
 };
