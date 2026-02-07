@@ -5,7 +5,7 @@ import { Environment } from '../types/env';
   Core Types
 =========================== */
 
-type HttpMethod = `GET` | `POST` | `PUT` | `DELETE`;
+type HttpMethod = `GET` | `POST` | `PUT` | `PATCH` | `DELETE`;
 export type Handler = (request: Request, env: Environment, ctx: ExecutionContext) => Promise<Response>;
 type Node = { [method in HttpMethod ]: Handler };
 type Routes = { [pathname: string]: Node };
@@ -40,6 +40,7 @@ export const router = {
   get: registerRoute.bind(null, `GET`),
   post: registerRoute.bind(null, `POST`),
   put: registerRoute.bind(null, `PUT`),
+  patch: registerRoute.bind(null, `PATCH`),
   delete: registerRoute.bind(null, `DELETE`),
 };
 
@@ -58,7 +59,7 @@ export const requestHandler = async (
     ? {
         "Access-Control-Allow-Origin": allowedOrigin,
         "Access-Control-Allow-Credentials": `true`,
-        "Access-Control-Allow-Methods": `GET,POST,PUT,DELETE,OPTIONS`,
+        "Access-Control-Allow-Methods": `GET,POST,PUT,PATCH,DELETE,OPTIONS`,
         "Access-Control-Allow-Headers":
           request.headers.get(`Access-Control-Request-Headers`) ??
           `Content-Type,Authorization`,
