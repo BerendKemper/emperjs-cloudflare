@@ -48,7 +48,10 @@ const MAX_DISPLAY_NAME_LENGTH = 80;
 export const handleUpdateDisplayName: Handler = async (request, env) => {
   const session = await verifySessionFromRequest(request, env.SESSION_SECRET);
   if (!session) {
-    return new Response(`Unauthorized`, { status: 401 });
+    return new Response(
+      `Unauthorized. Missing session cookie; use fetch with credentials: "include".`,
+      { status: 401 }
+    );
   }
 
   const user = await getUserById(env, session.userId);
