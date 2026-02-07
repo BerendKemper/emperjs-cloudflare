@@ -202,3 +202,16 @@ export async function getUserById(env: Environment, id: string) {
     roles: parseRoles(user.roles),
   } satisfies UserRecord;
 }
+
+export async function updateUserDisplayName(
+  env: Environment,
+  id: string,
+  displayName: string | null
+) {
+  const now = Date.now();
+  await env.USERS.prepare(
+    `UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?`
+  )
+    .bind(displayName, now, id)
+    .run();
+}
